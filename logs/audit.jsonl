@@ -1,3 +1,12 @@
 {"timestamp": "2026-11-15T18:43:30+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "missing_or_empty_text"}
 {"timestamp": "2026-11-15T18:43:30+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "missing_or_empty_text"}
 {"timestamp": "2026-11-15T18:44:10+00:00", "content_id": "8241ef998cb0", "creator_id": "saba", "guess": "human", "model_score": 0.2482, "style_score": null, "combined_score": null, "label": null, "status": "decided"}
+{"timestamp": "2026-11-15T23:15:54+00:00", "content_id": "6eccd4dfa47a", "creator_id": "saba", "guess": "unsure", "model_score": 0.6946, "style_score": 0.4162, "combined_score": 0.5554, "label": null, "status": "decided"}
+{"timestamp": "2026-11-15T23:18:26+00:00", "content_id": "17ad7aa87518", "creator_id": "saba", "guess": "unsure", "model_score": 0.5288, "style_score": 0.4738, "combined_score": 0.5013000000000001, "label": null, "status": "decided"}
+{"timestamp": "2026-11-15T23:35:45+00:00", "content_id": "db70d0000efc", "creator_id": "saba", "guess": "unsure", "model_score": 0.6909, "style_score": 0.5413, "combined_score": 0.6161, "label": null, "status": "decided"}
+{"timestamp": "2026-11-15T23:36:51+00:00", "content_id": "83cfb657cbc5", "creator_id": "saba", "guess": "ai", "model_score": 0.8878, "style_score": 0.4992, "combined_score": 0.6935, "label": null, "status": "decided"}
+{"timestamp": "2026-11-15T23:38:10+00:00", "content_id": "6d2d892d7638", "creator_id": "saba", "guess": "unsure", "model_score": 0.667, "style_score": 0.4741, "combined_score": 0.57055, "label": null, "status": "decided"}
+{"timestamp": "2026-11-15T23:41:04+00:00", "content_id": "f9c35daa74f9", "creator_id": "saba", "guess": "unsure", "model_score": 0.4048, "style_score": 0.6321, "combined_score": 0.51845, "label": null, "status": "decided"}
+{"timestamp": "2026-11-15T23:42:48+00:00", "content_id": "085015e37312", "creator_id": "saba", "guess": "ai", "model_score": 0.8355, "style_score": 0.5342, "combined_score": 0.68485, "label": null, "status": "decided"}
+{"timestamp": "2026-11-15T23:45:41+00:00", "content_id": "db70d0000efc", "creator_id": "saba", "event": "appeal", "status": "under_review", "reasoning": "I wrote this essay myself about my own life."}
+{"timestamp": "2026-11-15T23:46:00+00:00", "creator_id": "saba", "event": "rejected", "status": "rejected", "reason": "missing_or_empty_text"}

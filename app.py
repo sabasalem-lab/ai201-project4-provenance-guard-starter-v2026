@@ -31,6 +31,8 @@ from flask import Flask, jsonify, request
 import audit
 import config
 import detector
+import scoring
+import stylometry
 
 app = Flask(__name__)
 
@@ -225,11 +227,9 @@ def submit():
 
     model_score = detector.model_signal(text)
 
-    # Milestone 4 fills these in for real.
-    style_score = None
-    confidence = model_score
-    guess = "ai" if model_score >= 0.5 else "human"
-    label = "placeholder — label text arrives in Milestone 5"
+    style_score = stylometry.style_signal(text)
+    confidence = scoring.combine_signals(model_score, style_score)
+    guess, label = scoring.score_to_label(confidence)
 
     audit.log_decision(
         content_id=content_id,
@@ -238,6 +238,7 @@ def submit():
         model_score=model_score,
         style_score=style_score,
         status="decided",
+        combined_score=confidence,
     )
 
     return jsonify({
@@ -272,13 +273,24 @@ def appeal():
     """
     payload = request.get_json(silent=True) or {}
 
-    # TODO: delete this and build the route.
-    return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning")
+    creator_id = payload.get("creator_id")
 
+    if not isinstance(content_id, str) or not content_id.strip():
+        return jsonify({"error": "invalid_input",
+                        "message": "Send JSON with a 'content_id' field."}), 400
+    if not audit.entries_for(content_id):
+        return jsonify({"error": "not_found",
+                        "message": "No submission with that content_id."}), 404
+
+    audit.log_appeal(content_id=content_id, creator_id=creator_id or "unknown", reasoning=reasoning or "")
+    return jsonify({
+        "ok": True,
+        "content_id": content_id,
+        "status": "under_review",
+        "message": "Your appeal has been recorded. A person will review this decision.",
+    })
 
 # ── Already works ─────────────────────────────────────────────────────────────
 
