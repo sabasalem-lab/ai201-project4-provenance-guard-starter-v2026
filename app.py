@@ -30,6 +30,7 @@ from flask import Flask, jsonify, request
 
 import audit
 import config
+import detector
 
 app = Flask(__name__)
 
@@ -201,15 +202,52 @@ def submit():
     """
     payload = request.get_json(silent=True) or {}
 
-    # TODO: delete this and build the route.
+    text = payload.get("text")
+    creator_id = payload.get("creator_id")
+
+    # Bad input: missing/empty text or creator_id → 400, no classification.
+    if not isinstance(text, str) or not text.strip():
+        audit.log_rejection(
+            creator_id=creator_id or "unknown",
+            reason="missing_or_empty_text",
+        )
+        return jsonify({
+            "error": "invalid_input",
+            "message": "Send JSON with a non-empty 'text' field and a 'creator_id'.",
+        }), 400
+    if not isinstance(creator_id, str) or not creator_id.strip():
+        return jsonify({
+            "error": "invalid_input",
+            "message": "Send JSON with a 'creator_id' field.",
+        }), 400
+
+    content_id = uuid.uuid4().hex[:12]
+
+    model_score = detector.model_signal(text)
+
+    # Milestone 4 fills these in for real.
+    style_score = None
+    confidence = model_score
+    guess = "ai" if model_score >= 0.5 else "human"
+    label = "placeholder — label text arrives in Milestone 5"
+
+    audit.log_decision(
+        content_id=content_id,
+        creator_id=creator_id,
+        guess=guess,
+        model_score=model_score,
+        style_score=style_score,
+        status="decided",
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /submit isn't built yet — see the TODO in app.py.",
-        "you_sent": {
-            "text_length": len(payload.get("text", "")),
-            "creator_id": payload.get("creator_id"),
-        },
-    }), 501
+        "content_id": content_id,
+        "guess": guess,
+        "confidence": confidence,
+        "model_score": model_score,
+        "style_score": style_score,
+        "label": label,
+    })
 
 
 @app.post("/appeal")
