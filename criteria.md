@@ -42,63 +42,32 @@ Two things worth knowing before you pick numbers:
   a **miss**.
 
 ---
-## 1.
+# Acceptance criteria — Provenance Guard
 
-<!-- Your criterion. It must name a number. -->
+## 1. False positives
+**Criterion:** When testing 10 pieces of text that I wrote or collected myself and know to be human-written, no more than 1 may be classified as high-confidence AI-generated.
 
+**Why this target:** False positives can incorrectly identify genuine human writing as AI-generated. I chose a maximum of 1 out of 10 because the system should minimize incorrect accusations. I consider this target acceptable because users can appeal a classification and request a review.
 
+## 2. Label coverage
+**Criterion:** Across a test set of at least 10 varied text submissions, the system must produce all three available classifications at least once: AI-generated, human-written, and uncertain.
 
-**Why this target:**
+**Why this target:** A useful detection system must support all three classifications rather than assigning every submission to only one or two categories. The uncertain category is important when the system cannot confidently distinguish between human and AI writing.
 
+## 3. Appeal path
+**Criterion:** In 10 out of 10 valid appeal attempts, the system must change the corresponding submission status to `under_review` and create a corresponding record in the appeal log, verifiable through `GET /log`.
 
+**Why this target:** Users should have a reliable way to challenge a classification. Recording every appeal makes the review process traceable and prevents requests from being lost.
 
----
+## 4. Bad input handling
+**Criterion:** In 10 out of 10 tests involving empty text or a missing text field, the system must return an HTTP 400 response containing an error field, without crashing or producing an AI-detection classification.
 
-## 2.
+**Why this target:** Users may accidentally submit incomplete information. The system should handle these situations predictably instead of crashing or producing misleading classifications.
 
-<!-- Your criterion. -->
+## 5. Score spread
+**Criterion:** The average combined confidence score for 10 clearly AI-generated text samples produced by a chatbot must be at least 30 percentage points higher than the average combined confidence score for 10 clearly human-written samples that I wrote or collected myself.
 
-
-
-**Why this target:**
-
-
-
----
-
-## 3.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
-
-
-
----
-
-## 4.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
-
-
-
----
-
-## 5.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
-
-
+**Why this target:** The system should demonstrate a measurable difference between clearly AI-generated and clearly human-written text. I chose a 30-percentage-point difference as a measurable target for evaluating whether the combined confidence score distinguishes between the two groups.
 
 ---
 
