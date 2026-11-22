@@ -74,6 +74,16 @@ WEIGHT_STYLE_SIGNAL = 0.5
 HUMAN_THRESHOLD = 0.35
 AI_THRESHOLD = 0.65
 
+# ─── Input validation (UNIT 8 improvement) ───────────────────────────────────
+# Fewer real words than this gets a 400 before any signal runs. Words are
+# counted with \w+, which matches letters in any script (so Arabic or Hebrew
+# counts) but not emoji, punctuation or control characters.
+MIN_WORDS = 5
+
+# Longer than this gets a 400. The detector only reads the first 400 tokens,
+# so anything past this is unread text and a cheap way to load the service.
+MAX_TEXT_CHARS = 20000
+
 # ⚠️ One thing that catches people out in Milestone 5. A weighted average can
 # only land between its two inputs — so while `style_signal` is still the stub
 # returning 0.5, the combined score can never leave 0.25–0.75 no matter what

@@ -27,7 +27,7 @@ Routes:
 import uuid
 
 from flask import Flask, jsonify, request
-
+import re
 import audit
 import config
 import detector
@@ -202,7 +202,17 @@ def submit():
     what should this do when `text` is missing, empty, or enormous? A crash on
     a malformed input is one of the most common real failures there is.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+
+    # A body that isn't a JSON object (a list, a string, unparseable JSON, an
+    # empty body) has no fields to read. Before this check, a JSON list reached
+    # payload.get() and crashed the route with a 500 (attack RQ07).
+    if not isinstance(payload, dict):
+        audit.log_rejection(creator_id="unknown", reason="body_not_json_object")
+        return jsonify({
+            "error": "invalid_input",
+            "message": "Send a JSON object with a 'text' field and a 'creator_id'.",
+        }), 400
 
     text = payload.get("text")
     creator_id = payload.get("creator_id")
@@ -227,9 +237,33 @@ def submit():
             "message": "Send JSON with a 'creator_id' field.",
         }), 400
 
+    # Too long: unread text the detector never sees (attack MF08).
+    if len(text) > config.MAX_TEXT_CHARS:
+        audit.log_rejection(creator_id=creator_id, reason="text_too_long")
+        return jsonify({
+            "error": "text_too_long",
+            "message": f"Text is over {config.MAX_TEXT_CHARS} characters.",
+        }), 400
+
+    # Too short: fewer than MIN_WORDS real words, in any script. Catches a
+    # single character, one long word, emoji, punctuation and control
+    # characters (attacks MF02-MF06) before either signal scores them.
+    if len(re.findall(r"\w+", text)) < config.MIN_WORDS:
+        audit.log_rejection(creator_id=creator_id, reason="text_too_short")
+        return jsonify({
+            "error": "text_too_short",
+            "message": f"Send at least {config.MIN_WORDS} words so there is something to judge.",
+        }), 400
+
     content_id = uuid.uuid4().hex[:12]
 
-    model_score = detector.model_signal(text)
+    # The detector raises ValueError on text it can't score. That used to
+    # escape as a 500 (attack MF02); now it is a 400 the writer can act on.
+    try:
+        model_score = detector.model_signal(text)
+    except ValueError as exc:
+        audit.log_rejection(creator_id=creator_id, reason="text_unscorable")
+        return jsonify({"error": "text_too_short", "message": str(exc)}), 400
 
     style_score = stylometry.style_signal(text)
     confidence = scoring.combine_signals(model_score, style_score)
