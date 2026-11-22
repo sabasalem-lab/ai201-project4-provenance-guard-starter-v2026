@@ -154,7 +154,7 @@ def health():
 # ── YOU BUILD THIS ────────────────────────────────────────────────────────────
 
 @app.post("/submit")
-# @limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
+@limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
 def submit():
     """
     Take a piece of text, decide about it, log the decision, answer.
@@ -218,6 +218,10 @@ def submit():
             "message": "Send JSON with a non-empty 'text' field and a 'creator_id'.",
         }), 400
     if not isinstance(creator_id, str) or not creator_id.strip():
+        audit.log_rejection(
+            creator_id="unknown",
+            reason="missing_creator_id",
+        )
         return jsonify({
             "error": "invalid_input",
             "message": "Send JSON with a 'creator_id' field.",
@@ -237,8 +241,9 @@ def submit():
         guess=guess,
         model_score=model_score,
         style_score=style_score,
-        status="decided",
         combined_score=confidence,
+        label=label,
+        status="decided",
     )
 
     return jsonify({

@@ -10,3 +10,18 @@
 {"timestamp": "2026-11-15T23:42:48+00:00", "content_id": "085015e37312", "creator_id": "saba", "guess": "ai", "model_score": 0.8355, "style_score": 0.5342, "combined_score": 0.68485, "label": null, "status": "decided"}
 {"timestamp": "2026-11-15T23:45:41+00:00", "content_id": "db70d0000efc", "creator_id": "saba", "event": "appeal", "status": "under_review", "reasoning": "I wrote this essay myself about my own life."}
 {"timestamp": "2026-11-15T23:46:00+00:00", "creator_id": "saba", "event": "rejected", "status": "rejected", "reason": "missing_or_empty_text"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "content_id": "c9cf98b4673b", "creator_id": "flood_tester", "guess": "human", "model_score": 0.2588, "style_score": 0.3352, "combined_score": 0.297, "label": "This text looks like it was written by a person.", "status": "decided"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "content_id": "3f951a3a2abd", "creator_id": "flood_tester", "guess": "human", "model_score": 0.2588, "style_score": 0.3352, "combined_score": 0.297, "label": "This text looks like it was written by a person.", "status": "decided"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "content_id": "b782501fb5c1", "creator_id": "flood_tester", "guess": "human", "model_score": 0.2588, "style_score": 0.3352, "combined_score": 0.297, "label": "This text looks like it was written by a person.", "status": "decided"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "content_id": "2b9fd36f0380", "creator_id": "flood_tester", "guess": "human", "model_score": 0.2588, "style_score": 0.3352, "combined_score": 0.297, "label": "This text looks like it was written by a person.", "status": "decided"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "content_id": "ff2b6f02c035", "creator_id": "flood_tester", "guess": "human", "model_score": 0.2588, "style_score": 0.3352, "combined_score": 0.297, "label": "This text looks like it was written by a person.", "status": "decided"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+{"timestamp": "2026-11-22T20:31:51+00:00", "creator_id": "flood_tester", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
