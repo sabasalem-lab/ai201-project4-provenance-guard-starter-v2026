@@ -1,116 +1,79 @@
-# Provenance Guard
+Provenance Guard
+👋 Start here
 
-> ### 👋 Start here
->
-> **New to this repo? Read [RUNNING.md](RUNNING.md) first.**
->
-> Once `python test.py` passes, in one terminal:
->
-> ```bash
-> python app.py
-> ```
->
-> and in another:
->
-> ```bash
-> curl -X POST http://127.0.0.1:5000/ping \
->   -H "Content-Type: application/json" \
->   -d '{"message": "hello"}'
-> ```
->
-> That's a web service. Something sent it text and it sent something back.
-> Everything this unit is filling in the middle.
->
-> **The rest of this file is your submission.** Fill it in as you go.
+New to this repo? Read RUNNING.md first.
 
----
+Once python test.py passes, in one terminal:
 
-<!-- ─────────────────────────────────────────────────────────────────────────
-     Unit 7 asks for the first five sections. Unit 8 adds the five below.
+bash
+python app.py
 
-     Everything is pasted as TEXT. A pasted curl response gets full credit;
-     a picture of your terminal gets none.
-     ───────────────────────────────────────────────────────────────────────── -->
+and in another:
 
-<!-- ═══════════════════════ UNIT 7 — THE BUILD ═══════════════════════ -->
+bash
+curl -X POST http://127.0.0.1:5000/ping \
+  -H "Content-Type: application/json" \
+  -d '{"message": "hello"}'
 
-## What This Does
+That's a web service. Something sent it text and it sent something back. Everything this unit is filling in the middle.
 
-1. A submission arrives as JSON at `POST /submit` with `text` and `creator_id`.
-2. The route validates it: missing or empty text returns a 400 with an error field, logs a rejection, and never reaches a signal.
-3. Valid text gets a 12-character `content_id`.
-4. Signal one (`detector.model_signal`) scores how predictable the text is to GPT-2, 0–1, higher = more AI-like.
-5. Signal two (`stylometry.style_signal`) scores the shape of the text — sentence-length spread, vocabulary variety, punctuation — same direction.
-6. `scoring.combine_signals` averages the two into one confidence score, and `scoring.score_to_label` turns that into a guess and the sentence a reader sees.
-7. The decision is written to `logs/audit.jsonl` with both signal scores, and the response returns the id, both scores, the combined score, and the label. A writer who disagrees posts the `content_id` to `POST /appeal`, which marks it `under_review` and records their reasoning next to the original decision.
+The rest of this file is your submission. Fill it in as you go.
 
----
+<!-- ───────────────────────────────────────────────────────────────────────── Unit 7 asks for the first five sections. Unit 8 adds the five below. Everything is pasted as TEXT. A pasted curl response gets full credit; a picture of your terminal gets none. ───────────────────────────────────────────────────────────────────────── --> <!-- ═══════════════════════ UNIT 7 — THE BUILD ═══════════════════════ -->
+What This Does
+A submission arrives as JSON at POST /submit with text and creator_id.
+The route validates it: a body that isn't a JSON object, missing or empty text, fewer than 5 words, or more than 20,000 characters returns a 400 with an error field, logs a rejection, and never reaches a signal.
+Valid text gets a 12-character content_id.
+Signal one (detector.model_signal) scores how predictable the text is to GPT-2, 0–1, higher = more AI-like.
+Signal two (stylometry.style_signal) scores the shape of the text — sentence-length spread, vocabulary variety, punctuation — same direction.
+scoring.combine_signals averages the two into one confidence score, and scoring.score_to_label turns that into a guess and the sentence a reader sees.
+The decision is written to logs/audit.jsonl with both signal scores, and the response returns the id, both scores, the combined score, and the label. A writer who disagrees posts the content_id to POST /appeal, which marks it under_review and records their reasoning next to the original decision.
+Signals and Scoring
+<!-- For each signal: what property it measures, why that might differ between human and AI writing, and WHAT IT CAN'T SEE. The blind spot is not optional. If you can't name it you don't understand the signal yet — and unit 8's attack set is built out of blind spots. -->
+Signal one — the model signal
 
-## Signals and Scoring
+What it measures: How predictable the text is to GPT-2 (perplexity, scaled to 0–1; higher = more likely AI).
 
-<!-- For each signal: what property it measures, why that might differ between
-     human and AI writing, and WHAT IT CAN'T SEE.
+Why that might differ between human and AI writing: A language model writes by picking likely next words, so model-written text is text a model finds easy to predict. Human writing wanders — odd word choices, abrupt turns.
 
-     The blind spot is not optional. If you can't name it you don't understand
-     the signal yet — and unit 8's attack set is built out of blind spots. -->
+What it can't see: Predictability is not authorship. It rewards common words in short, ordinary sentences, so it flags real people who write plainly — second-language writers, anyone writing simply on purpose. I saw this on my own writing: a genuine essay I wrote scored 0.6909. The reverse also holds: rare words surprise GPT-2, so ornate human prose scores human for the wrong reason.
 
-### Signal one — the model signal
+Signal two — the style signal
 
-**What it measures:** How predictable the text is to GPT-2 (perplexity, scaled to 0–1; higher = more likely AI).
+What it measures: The shape of the text, without reading it: sentence-length spread (stdev/mean of sentence word counts), type-token ratio (unique/total words), and varied-punctuation density per word. Each scaled to 0–1, flipped so higher = more AI-ish, averaged in equal thirds.
 
-**Why that might differ between human and AI writing:** A language model writes by picking likely next words, so model-written text is text a model finds easy to predict. Human writing wanders — odd word choices, abrupt turns.
+Why that might differ between human and AI writing: Generated prose tends toward even, mid-length sentences and a narrower vocabulary band; human writing is lumpier — a three-word sentence next to a forty-word one.
 
-**What it can't see:** Predictability is not authorship. It rewards common words in short, ordinary sentences, so it flags real people who write plainly — second-language writers, anyone writing simply on purpose. I saw this on my own writing: a genuine essay I wrote scored 0.6909. The reverse also holds: rare words surprise GPT-2, so ornate human prose scores human for the wrong reason.
-### Signal two — the style signal
+What it can't see: It cannot read. Anything that changes shape without changing substance moves it — typos, broken-up sentences, pasted quotations — which is cheap to do on purpose.
 
-**What it measures:** The shape of the text, without reading it: sentence-length spread (stdev/mean of sentence word counts), type-token ratio (unique/total words), and varied-punctuation density per word. Each scaled to 0–1, flipped so higher = more AI-ish, averaged in equal thirds.
+The combining rule
 
-**Why that might differ between human and AI writing:** Generated prose tends toward even, mid-length sentences and a narrower vocabulary band; human writing is lumpier — a three-word sentence next to a forty-word one.
+The rule: A weighted average of the two signals. When they disagree, the average lands mid-range — in the unsure band — which I take as correct: two independent methods disagreeing is uncertainty.
 
-**What it can't see:** It cannot read. Anything that changes shape without changing substance moves it — typos, broken-up sentences, pasted quotations — which is cheap to do on purpose.
+The numbers: 0.5 × model_score + 0.5 × style_score (weights in config.py). Equal weights because the signals measure independent things and I had no evidence to trust one over the other.
 
-### The combining rule
+Where it lives: scoring.py::combine_signals
 
-**The rule:** A weighted average of the two signals. When they disagree, the average lands mid-range — in the unsure band — which I take as correct: two independent methods disagreeing *is* uncertainty.
+A case where my two signals split, and what my rule does with it: A formal literary-analysis paragraph I wrote scored 0.4048 on the model signal (rare words like "trochaic" surprise GPT-2) but 0.6321 on style (long, even academic sentences). They disagreed by 0.23; the average, 0.5185, landed it in unsure — no accusation either way, which is what I want when my two methods can't agree.
 
-**The numbers:** 0.5 × model_score + 0.5 × style_score (weights in `config.py`). Equal weights because the signals measure independent things and I had no evidence to trust one over the other.
+Label Variants
+<!-- The exact text of all three labels, as a reader would see them, and the score range each covers. Write them for someone who has never heard the word "threshold". -->
+Label	Score range	The exact text a reader sees
+high-confidence human	0.00 – 0.35	This text looks like it was written by a person.
+unsure	0.35 – 0.65	We could not confidently determine whether this text was written by a person or generated by AI. No action will be taken based on this result.
+high-confidence AI	0.65 – 1.00	This text is very likely to have been generated by AI. If you believe this result is incorrect, you can appeal it for human review.
 
-**Where it lives:** `scoring.py::combine_signals`
+Why I worded the "unsure" one this way: The person reading it may have written every word themselves, so it has to admit the system's limitation without implying theirs. I named the uncertainty as ours ("we could not confidently determine") and said explicitly that no action follows, so a real writer reads it as "the system can't tell" rather than "you're suspected."
 
-**A case where my two signals split, and what my rule does with it:** A formal literary-analysis paragraph I wrote scored 0.4048 on the model signal (rare words like "trochaic" surprise GPT-2) but 0.6321 on style (long, even academic sentences). They disagreed by 0.23; the average, 0.5185, landed it in unsure — no accusation either way, which is what I want when my two methods can't agree.
+Sample Run
 
----
+A submission — an essay I wrote myself:
 
-## Label Variants
-
-<!-- The exact text of all three labels, as a reader would see them, and the
-     score range each covers.
-
-     Write them for someone who has never heard the word "threshold". -->
-
-| Label | Score range | The exact text a reader sees |
-|---|---|---|
-| high-confidence human | 0.00 – 0.35 | This text looks like it was written by a person. |
-| unsure | 0.35 – 0.65 | We could not confidently determine whether this text was written by a person or generated by AI. No action will be taken based on this result. |
-| high-confidence AI | 0.65 – 1.00 | This text is very likely to have been generated by AI. If you believe this result is incorrect, you can appeal it for human review. |
-
-**Why I worded the "unsure" one this way:**
-The person reading it may have written every word themselves, so it has to admit the system's limitation without implying theirs. I named the uncertainty as ours ("we could not confidently determine") and said explicitly that no action follows, so a real writer reads it as "the system can't tell" rather than "you're suspected."
-
----
-
-
-## Sample Run
-
-**A submission** — an essay I wrote myself:
-
-```bash
+bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
   -d '{"text": "In my first semester at Irvine Valley College, I flew home for a funeral and missed about a week of class. [full essay — abridged here for length]", "creator_id": "saba"}'
-```
-
-```json
+json
 {
     "confidence":  0.6161,
     "content_id":  "db70d0000efc",
@@ -119,32 +82,26 @@ $ curl -X POST http://127.0.0.1:5000/submit \
     "model_score":  0.6909,
     "style_score":  0.5413
 }
-```
 
-**An appeal** — on that same submission:
+An appeal — on that same submission:
 
-```bash
+bash
 $ curl -X POST http://127.0.0.1:5000/appeal \
   -H "Content-Type: application/json" \
   -d '{"content_id": "db70d0000efc", "creator_id": "saba", "reasoning": "I wrote this essay myself about my own life."}'
-```
-
-```json
+json
 {
     "content_id":  "db70d0000efc",
     "message":  "Your appeal has been recorded. A person will review this decision.",
     "ok":  true,
     "status":  "under_review"
 }
-```
 
-**What the log shows afterwards** — the original decision, the appeal that moved it to `under_review`, and a rejected bad input:
+What the log shows afterwards — the original decision, the appeal that moved it to under_review, and a rejected bad input:
 
-```bash
+bash
 $ curl "http://127.0.0.1:5000/log?limit=3"
-```
-
-```json
+json
 {
     "combined_score":  0.6161,
     "content_id":  "db70d0000efc",
@@ -170,173 +127,139 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
     "status":  "rejected",
     "timestamp":  "2026-11-15T23:46:00+00:00"
 }
-```
----
+How I Used AI
 
-## How I Used AI
+Moment 1
 
-**Moment 1**
+What I asked for: I drafted my five acceptance criteria and asked Claude to check only whether each could be tested by someone who couldn't ask me what I meant — not to write them.
+What came back: It flagged that my label-coverage criterion demanded all three labels from exactly three submissions (only satisfiable if every one landed perfectly), and that "clear validation error" named no observable.
+What I changed: Rewrote them to require at least ten varied submissions, and named the observable: HTTP 400 with an error field.
 
-- *What I asked for:* I drafted my five acceptance criteria and asked Claude to check only whether each could be tested by someone who couldn't ask me what I meant — not to write them.
-- *What came back:* It flagged that my label-coverage criterion demanded all three labels from exactly three submissions (only satisfiable if every one landed perfectly), and that "clear validation error" named no observable.
-- *What I changed:* Rewrote them to require at least ten varied submissions, and named the observable: HTTP 400 with an error field.
+Moment 2
 
-**Moment 2**
+What I asked for: When my own genuine essay scored 0.6161 — 0.034 below the AI threshold — I worked through with Claude which signal drove the near-miss.
+What came back: The model signal (0.6909) was the driver: plain sentences built from common words are exactly what GPT-2 predicts easily, the structural bias detector.py warns about.
+What I changed: I kept my 0.5/0.5 weights but wrote the near-miss into this README as evidence for why the unsure band and the appeal path carry the real safety weight, and appealed that submission as my sample appeal.
 
-- *What I asked for:* When my own genuine essay scored 0.6161 — 0.034 below the AI threshold — I worked through with Claude which signal drove the near-miss.
-- *What came back:* The model signal (0.6909) was the driver: plain sentences built from common words are exactly what GPT-2 predicts easily, the structural bias detector.py warns about.
-- *What I changed:* I kept my 0.5/0.5 weights but wrote the near-miss into this README as evidence for why the unsure band and the appeal path carry the real safety weight, and appealed that submission as my sample appeal.
+Moment 3 (Unit 8)
 
+What I asked for: After the attack run, I asked Claude to help me mark all 56 attacks and group the failures by pipeline stage, and to write the scenario and appeal-check scripts for my five criteria.
+What came back: A marking rule per attack family, a grouping of 16 breaks into three problems (route validation, signal one plus equal weights, signal two on non-Latin text), and scenarios.py plus appeal_check.py. It also worked out that criterion 5's 18-point gap came from signal two separating my writing from AI by only 3 points.
+What I changed: I chose the improvement myself from three options it laid out, picking input validation because it fixed a crash, and I kept the FP and threshold problems in What's Still Broken rather than also changing them.
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
+Rate Limiting
 
----
+My limits: 5 per minute, 100 per day
 
-## Rate Limiting
+Why those numbers and not others: A real writer revising their own piece might submit 3 or 4 times in a burst, so 5 a minute doesn't get in their way. 100 a day is far more than one person needs. A script probing my thresholds with a thousand slightly different versions hits the per-minute limit almost immediately, and at 100 a day, a thousand probes would take ten days.
 
-**My limits:** 5 per minute, 100 per day
+What a caller counts as: Per creator_id, falling back to the caller's address when there's no usable creator_id (app.py::rate_limit_key). The weakness: one script can send each request under a new creator_id and never hit the limit. The attack set did exactly that, since every row used its own attacker_<id>. Only the flood_same_creator rows, which shared one id, were stopped.
 
-**Why those numbers and not others:** A real writer revising their own piece might submit 3 or 4 times in a burst, so 5 a minute doesn't get in their way. 100 a day is far more than one person needs. A script probing my thresholds with a thousand slightly different versions hits the per-minute limit almost immediately, and at 100 a day, a thousand probes would take ten days.
+The run of status codes when I pushed past it:
 
-**What a caller counts as:** Per `creator_id`, falling back to the caller's address when there's no usable creator_id (`app.py::rate_limit_key`). The weakness: one script can send each request under a new creator_id and never hit the limit. The attack set did exactly that, since every row used its own `attacker_<id>`. Only the `flood_same_creator` rows, which shared one id, were stopped.
-
-**The run of status codes when I pushed past it:**
-
-```
 $ python run_attacks.py --flood 15
 200 200 200 200 200 429 429 429 429 429 429 429 429 429 429
 10 of 15 were rate limited.
-```
+Attack Run — Before
 
----
+56 attacks, run with python run_attacks.py --set attack_set --label before (full output: results/attack_run_2026-11-22_1235_before.md). Combined-score thresholds: human ≤ 0.35, AI ≥ 0.65.
 
-## Attack Run — Before
+Marking rule: evasion BROKE if labeled human; false positive BROKE if labeled AI; prompt injection BROKE if the outcome moved in the attacker's favor; malformed HELD only on a clean 400 or 429, BROKE on a 500 or on a label given to text that isn't real writing; flood HELD if the limiter cut it off. Evasion inputs that landed in unsure count as HELD because the system didn't vouch for them, but no action is taken on unsure, so they weren't caught either.
 
-56 attacks, run with `python run_attacks.py --set attack_set --label before` (full output: `results/attack_run_2026-11-22_1235_before.md`). Combined-score thresholds: human ≤ 0.35, AI ≥ 0.65.
+ID	Family	Targeting	Status	Guess	Score	Verdict
+EV01	evasion	typos raise word variety	200	unsure	0.377	HELD
+EV02	evasion	broken-up sentences	200	unsure	0.469	HELD
+EV03	evasion	pasted quotation	200	unsure	0.569	HELD
+EV04	evasion	unusual words raise perplexity	200	unsure	0.592	HELD
+EV05	evasion	heavy human editing pass	200	human	0.344	BROKE
+EV06	evasion	one very long + one very short sentence	200	unsure	0.477	HELD
+EV07	evasion	padding with punctuation	200	unsure	0.538	HELD
+EV08	evasion	text below the token window	200	unsure	0.397	HELD
+EV09	evasion	human opening bolted onto AI text	200	unsure	0.584	HELD
+EV10	evasion	repeated stanza structure	200	ai	0.854	HELD
+FP01	false_positive	plain, clear human writing	200	unsure	0.585	HELD
+FP02	false_positive	formal register	200	ai	0.694	BROKE
+FP03	false_positive	non-native English speaker	200	ai	0.714	BROKE
+FP04	false_positive	student essay to a rubric	200	ai	0.697	BROKE
+FP05	false_positive	technical documentation	200	ai	0.729	BROKE
+FP06	false_positive	person imitating a formal template	200	ai	0.701	BROKE
+FP07	false_positive	deliberately repeated phrase	200	ai	0.693	BROKE
+FP08	false_positive	very short human submission	200	unsure	0.404	HELD
+PI01	prompt_injection	instruction to ignore the check	200	unsure	0.438	HELD
+PI02	prompt_injection	instruction disguised as a system message	200	human	0.282	BROKE
+PI03	prompt_injection	instruction in the writer's voice	200	unsure	0.544	HELD
+PI04	prompt_injection	make the label text hostile	200	unsure	0.480	HELD
+PI05	prompt_injection	inject into the audit log	200	unsure	0.450	HELD
+PI06	prompt_injection	instruction plus real human text	200	unsure	0.558	HELD
+MF01	malformed	only whitespace	400	—	—	HELD
+MF02	malformed	single character	500	—	—	BROKE
+MF03	malformed	control characters	200	human	0.333	BROKE
+MF04	malformed	only punctuation	200	unsure	0.506	BROKE
+MF05	malformed	very long single word	200	ai	0.832	BROKE
+MF06	malformed	emoji only	200	ai	0.998	BROKE
+MF07	malformed	right-to-left script	200	ai	0.953	BROKE
+MF08	malformed	60,000 characters	200	ai	0.893	BROKE
+RQ01	malformed	no text field	400	—	—	HELD
+RQ02	malformed	no creator_id	400	—	—	HELD
+RQ03	malformed	text is a number	400	—	—	HELD
+RQ04	malformed	text is a list	400	—	—	HELD
+RQ05	malformed	text is null	400	—	—	HELD
+RQ06	malformed	creator_id is an object	400	—	—	HELD
+RQ07	malformed	body is a JSON array	500	—	—	BROKE
+RQ08	malformed	unparseable JSON	400	—	—	HELD
+RQ09	malformed	empty body	400	—	—	HELD
+RQ10	malformed	form-encoded body	429	—	—	HELD*
+RQ11	malformed	JSON sent as plain text	429	—	—	HELD*
+RQ12	malformed	deeply nested JSON	400	—	—	HELD
+FL01_01–05	flood_same_creator	20 rapid submissions, one creator	200	human	0.348	HELD
+FL01_06–12	flood_same_creator	20 rapid submissions, one creator	429	—	—	HELD
 
-**Marking rule:** evasion BROKE if labeled human; false positive BROKE if labeled AI; prompt injection BROKE if the outcome moved in the attacker's favor; malformed HELD only on a clean 400 or 429, BROKE on a 500 or on a label given to text that isn't real writing; flood HELD if the limiter cut it off. Evasion inputs that landed in unsure count as HELD because the system didn't vouch for them, but no action is taken on unsure, so they weren't caught either.
+* RQ10 and RQ11 never reached my route. With no usable creator_id they counted against my address, which my flood test had already used up, so the limiter rejected them, not my validation. They didn't crash, but this run didn't test how my route handles them.
 
-| ID | Family | Targeting | Status | Guess | Score | Verdict |
-|---|---|---|---|---|---|---|
-| EV01 | evasion | typos raise word variety | 200 | unsure | 0.377 | HELD |
-| EV02 | evasion | broken-up sentences | 200 | unsure | 0.469 | HELD |
-| EV03 | evasion | pasted quotation | 200 | unsure | 0.569 | HELD |
-| EV04 | evasion | unusual words raise perplexity | 200 | unsure | 0.592 | HELD |
-| EV05 | evasion | heavy human editing pass | 200 | human | 0.344 | BROKE |
-| EV06 | evasion | one very long + one very short sentence | 200 | unsure | 0.477 | HELD |
-| EV07 | evasion | padding with punctuation | 200 | unsure | 0.538 | HELD |
-| EV08 | evasion | text below the token window | 200 | unsure | 0.397 | HELD |
-| EV09 | evasion | human opening bolted onto AI text | 200 | unsure | 0.584 | HELD |
-| EV10 | evasion | repeated stanza structure | 200 | ai | 0.854 | HELD |
-| FP01 | false_positive | plain, clear human writing | 200 | unsure | 0.585 | HELD |
-| FP02 | false_positive | formal register | 200 | ai | 0.694 | BROKE |
-| FP03 | false_positive | non-native English speaker | 200 | ai | 0.714 | BROKE |
-| FP04 | false_positive | student essay to a rubric | 200 | ai | 0.697 | BROKE |
-| FP05 | false_positive | technical documentation | 200 | ai | 0.729 | BROKE |
-| FP06 | false_positive | person imitating a formal template | 200 | ai | 0.701 | BROKE |
-| FP07 | false_positive | deliberately repeated phrase | 200 | ai | 0.693 | BROKE |
-| FP08 | false_positive | very short human submission | 200 | unsure | 0.404 | HELD |
-| PI01 | prompt_injection | instruction to ignore the check | 200 | unsure | 0.438 | HELD |
-| PI02 | prompt_injection | instruction disguised as a system message | 200 | human | 0.282 | BROKE |
-| PI03 | prompt_injection | instruction in the writer's voice | 200 | unsure | 0.544 | HELD |
-| PI04 | prompt_injection | make the label text hostile | 200 | unsure | 0.480 | HELD |
-| PI05 | prompt_injection | inject into the audit log | 200 | unsure | 0.450 | HELD |
-| PI06 | prompt_injection | instruction plus real human text | 200 | unsure | 0.558 | HELD |
-| MF01 | malformed | only whitespace | 400 | — | — | HELD |
-| MF02 | malformed | single character | 500 | — | — | BROKE |
-| MF03 | malformed | control characters | 200 | human | 0.333 | BROKE |
-| MF04 | malformed | only punctuation | 200 | unsure | 0.506 | BROKE |
-| MF05 | malformed | very long single word | 200 | ai | 0.832 | BROKE |
-| MF06 | malformed | emoji only | 200 | ai | 0.998 | BROKE |
-| MF07 | malformed | right-to-left script | 200 | ai | 0.953 | BROKE |
-| MF08 | malformed | 60,000 characters | 200 | ai | 0.893 | BROKE |
-| RQ01 | malformed | no text field | 400 | — | — | HELD |
-| RQ02 | malformed | no creator_id | 400 | — | — | HELD |
-| RQ03 | malformed | text is a number | 400 | — | — | HELD |
-| RQ04 | malformed | text is a list | 400 | — | — | HELD |
-| RQ05 | malformed | text is null | 400 | — | — | HELD |
-| RQ06 | malformed | creator_id is an object | 400 | — | — | HELD |
-| RQ07 | malformed | body is a JSON array | 500 | — | — | BROKE |
-| RQ08 | malformed | unparseable JSON | 400 | — | — | HELD |
-| RQ09 | malformed | empty body | 400 | — | — | HELD |
-| RQ10 | malformed | form-encoded body | 429 | — | — | HELD* |
-| RQ11 | malformed | JSON sent as plain text | 429 | — | — | HELD* |
-| RQ12 | malformed | deeply nested JSON | 400 | — | — | HELD |
-| FL01_01–05 | flood_same_creator | 20 rapid submissions, one creator | 200 | human | 0.348 | HELD |
-| FL01_06–12 | flood_same_creator | 20 rapid submissions, one creator | 429 | — | — | HELD |
+Totals: 40 held, 16 broke. By family: evasion 1/10 broke, false positive 6/8 broke, prompt injection 1/6 broke, malformed 8/20 broke, flood 0/12 broke.
 
-\* RQ10 and RQ11 never reached my route. With no usable creator_id they counted against my address, which my flood test had already used up, so the limiter rejected them, not my validation. They didn't crash, but this run didn't test how my route handles them.
+Ten audit log entries from the run
 
-**Totals:** 40 held, 16 broke. By family: evasion 1/10 broke, false positive 6/8 broke, prompt injection 1/6 broke, malformed 8/20 broke, flood 0/12 broke.
+json
+{"timestamp": "2026-11-22T20:35:24+00:00", "content_id": "be719ff31c81", "creator_id": "attacker_EV05", "guess": "human", "model_score": 0.3212, "style_score": 0.3677, "combined_score": 0.34445000000000003, "label": "This text looks like it was written by a person.", "status": "decided"}
+{"timestamp": "2026-11-22T20:35:25+00:00", "content_id": "5087539d2e1c", "creator_id": "attacker_FP02", "guess": "ai", "model_score": 0.7387, "style_score": 0.6484, "combined_score": 0.69355, "label": "This text is very likely to have been generated by AI. If you believe this result is incorrect, you can appeal it for human review.", "status": "decided"}
+{"timestamp": "2026-11-22T20:35:25+00:00", "content_id": "4ed889f615e3", "creator_id": "attacker_FP03", "guess": "ai", "model_score": 0.8051, "style_score": 0.6223, "combined_score": 0.7137, "label": "This text is very likely to have been generated by AI. If you believe this result is incorrect, you can appeal it for human review.", "status": "decided"}
+{"timestamp": "2026-11-22T20:35:25+00:00", "content_id": "b516d229804a", "creator_id": "attacker_FP07", "guess": "ai", "model_score": 0.8816, "style_score": 0.5052, "combined_score": 0.6934, "label": "This text is very likely to have been generated by AI. If you believe this result is incorrect, you can appeal it for human review.", "status": "decided"}
+{"timestamp": "2026-11-22T20:35:26+00:00", "content_id": "4b1e5133e099", "creator_id": "attacker_PI02", "guess": "human", "model_score": 0.2044, "style_score": 0.3605, "combined_score": 0.28245, "label": "This text looks like it was written by a person.", "status": "decided"}
+{"timestamp": "2026-11-22T20:35:26+00:00", "content_id": "9b58abd8e9d0", "creator_id": "attacker_PI05", "guess": "unsure", "model_score": 0.6401, "style_score": 0.2591, "combined_score": 0.4496, "label": "We could not confidently determine whether this text was written by a person or generated by AI. No action will be taken based on this result.", "status": "decided"}
+{"timestamp": "2026-11-22T20:35:26+00:00", "content_id": "d3461cc68b82", "creator_id": "attacker_MF03", "guess": "human", "model_score": 0.0, "style_score": 0.6667, "combined_score": 0.33335, "label": "This text looks like it was written by a person.", "status": "decided"}
+{"timestamp": "2026-11-22T20:35:27+00:00", "content_id": "d1d63b0fabd9", "creator_id": "attacker_MF06", "guess": "ai", "model_score": 0.9969, "style_score": 1.0, "combined_score": 0.9984500000000001, "label": "This text is very likely to have been generated by AI. If you believe this result is incorrect, you can appeal it for human review.", "status": "decided"}
+{"timestamp": "2026-11-22T20:35:27+00:00", "content_id": "ac9ce83a3cb4", "creator_id": "attacker_MF07", "guess": "ai", "model_score": 0.9064, "style_score": 1.0, "combined_score": 0.9532, "label": "This text is very likely to have been generated by AI. If you believe this result is incorrect, you can appeal it for human review.", "status": "decided"}
+{"timestamp": "2026-11-22T20:35:28+00:00", "creator_id": "attacker_flood", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
 
-**Ten audit log entries from the run**
+PI05 tried to inject into the audit log; its entry above is an ordinary, well-formed decision, so the log held. The last entry is a rate-limit rejection from the flood_same_creator rows, which carries fewer fields than a decision.
 
-```json
-PASTE THE TEN LOG LINES HERE
-```
+The single worst outcome — the one I'd least want to explain to a writer whose work got caught by it:
 
-{"timestamp": "2026-11-22T20:35:24+00:00", "content_id": "be719ff31c81", "creator_id": "attacker_EV05", "guess":
-"human", "model_score": 0.3212, "style_score": 0.3677, "combined_score": 0.34445000000000003, "label": "This text
-looks like it was written by a person.", "status": "decided"}
-{"timestamp": "2026-11-22T20:35:25+00:00", "content_id": "5087539d2e1c", "creator_id": "attacker_FP02", "guess": "ai",
-"model_score": 0.7387, "style_score": 0.6484, "combined_score": 0.69355, "label": "This text is very likely to have
-been generated by AI. If you believe this result is incorrect, you can appeal it for human review.", "status":
-"decided"}
-{"timestamp": "2026-11-22T20:35:25+00:00", "content_id": "4ed889f615e3", "creator_id": "attacker_FP03", "guess": "ai",
-"model_score": 0.8051, "style_score": 0.6223, "combined_score": 0.7137, "label": "This text is very likely to have
-been generated by AI. If you believe this result is incorrect, you can appeal it for human review.", "status":
-"decided"}
-{"timestamp": "2026-11-22T20:35:25+00:00", "content_id": "b516d229804a", "creator_id": "attacker_FP07", "guess": "ai",
-"model_score": 0.8816, "style_score": 0.5052, "combined_score": 0.6934, "label": "This text is very likely to have
-been generated by AI. If you believe this result is incorrect, you can appeal it for human review.", "status":
-"decided"}
-{"timestamp": "2026-11-22T20:35:26+00:00", "content_id": "4b1e5133e099", "creator_id": "attacker_PI02", "guess":
-"human", "model_score": 0.2044, "style_score": 0.3605, "combined_score": 0.28245, "label": "This text looks like it
-was written by a person.", "status": "decided"}
-{"timestamp": "2026-11-22T20:35:26+00:00", "content_id": "9b58abd8e9d0", "creator_id": "attacker_PI05", "guess":
-"unsure", "model_score": 0.6401, "style_score": 0.2591, "combined_score": 0.4496, "label": "We could not confidently
-determine whether this text was written by a person or generated by AI. No action will be taken based on this
-result.", "status": "decided"}
-{"timestamp": "2026-11-22T20:35:26+00:00", "content_id": "d3461cc68b82", "creator_id": "attacker_MF03", "guess":
-"human", "model_score": 0.0, "style_score": 0.6667, "combined_score": 0.33335, "label": "This text looks like it was
-written by a person.", "status": "decided"}
-{"timestamp": "2026-11-22T20:35:27+00:00", "content_id": "d1d63b0fabd9", "creator_id": "attacker_MF06", "guess": "ai",
-"model_score": 0.9969, "style_score": 1.0, "combined_score": 0.9984500000000001, "label": "This text is very likely to
-have been generated by AI. If you believe this result is incorrect, you can appeal it for human review.", "status":
-"decided"}
-{"timestamp": "2026-11-22T20:35:27+00:00", "content_id": "ac9ce83a3cb4", "creator_id": "attacker_MF07", "guess": "ai",
-"model_score": 0.9064, "style_score": 1.0, "combined_score": 0.9532, "label": "This text is very likely to have been
-generated by AI. If you believe this result is incorrect, you can appeal it for human review.", "status": "decided"}
-{"timestamp": "2026-11-22T20:35:28+00:00", "creator_id": "attacker_flood", "event": "rejected", "status": "rejected",
-"reason": "rate_limited", "limit": "5 per 1 minute"}
+FP03, a non-native English speaker writing carefully, was told "This text is very likely to have been generated by AI" with a combined score of 0.714 (model 0.805, style 0.622). It is exactly the writer detector.py warns about: someone sticking to vocabulary they are sure of, which GPT-2 finds predictable. That writer has the least room to argue back, and my system accused them with its most confident label.
 
-**The single worst outcome** — the one I'd least want to explain to a writer
-whose work got caught by it:
+Run Log and Verdicts
 
-FP03, a non-native English speaker writing carefully, was told "This text is very likely to have been generated by AI" with a combined score of 0.714 (model 0.805, style 0.622). It is exactly the writer `detector.py` warns about: someone sticking to vocabulary they are sure of, which GPT-2 finds predictable. That writer has the least room to argue back, and my system accused them with its most confident label.
+Criteria 1, 2, 4 and 5 run with python run_eval.py --label before (scenarios in scenarios.py, output in results/run_2026-11-22_1252_before.md). Criterion 3 can't be sent as text alone, so I wrote appeal_check.py: it submits my ten pieces of writing, appeals each content_id, then checks GET /log for an under_review appeal entry (output in results/appeal_check_before_trial1-3.md). All three trials gave identical scores, which is expected: neither signal is random.
 
----
-## Run Log and Verdicts
+Criterion	Target	Run 1	Run 2	Run 3	Verdict
+1. My own writing labeled high-confidence AI	≤ 1 of 10	1/10	1/10	1/10	MET
+2. All three labels produced across ≥10 varied inputs	3 of 3 labels	3/3	3/3	3/3	MET
+3. Appeal moves item to under_review and is logged	10 of 10	10/10	10/10	10/10	MET
+4. Empty or missing text returns 400 with an error field, no label	10 of 10	10/10	10/10	10/10	MET
+5. AI average combined score ≥ 30 points above my writing's average	≥ 30 pts	18.0	18.0	18.0	MISSED
 
-Criteria 1, 2, 4 and 5 run with `python run_eval.py --label before` (scenarios in `scenarios.py`, output in `results/run_2026-11-22_1252_before.md`). Criterion 3 can't be sent as text alone, so I wrote `appeal_check.py`: it submits my ten pieces of writing, appeals each `content_id`, then checks `GET /log` for an `under_review` appeal entry (output in `results/appeal_check_before_trial1-3.md`). All three trials gave identical scores, which is expected: neither signal is random.
+How I decided:
 
-| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
-|---|---|---|---|---|---|
-| 1. My own writing labeled high-confidence AI | ≤ 1 of 10 | 1/10 | 1/10 | 1/10 | MET |
-| 2. All three labels produced across ≥10 varied inputs | 3 of 3 labels | 3/3 | 3/3 | 3/3 | MET |
-| 3. Appeal moves item to under_review and is logged | 10 of 10 | 10/10 | 10/10 | 10/10 | MET |
-| 4. Empty or missing text returns 400 with an error field, no label | 10 of 10 | 10/10 | 10/10 | 10/10 | MET |
-| 5. AI average combined score ≥ 30 points above my writing's average | ≥ 30 pts | 18.0 | 18.0 | 18.0 | MISSED |
+1: Exactly one of ten was labeled AI in every trial, which is at the limit, not under it. The flagged piece was my paragraph about my cousin's funeral and my B grade (combined 0.688, model 0.800).
+2: All three labels appeared in every trial. Caveat: the only two human labels came from two informal probe texts written by Claude for this test. None of my real writing reached the human label.
+3: 30 of 30 appeals across three trials returned under_review and appeared in the log.
+4: 30 of 30 bad bodies (empty, whitespace, null, missing text) returned 400 with no label.
+5: My ten pieces averaged 0.499, the ten AI samples 0.679. The gap is 18.0 points, against a target of 30.
 
-**How I decided:**
-- **1:** Exactly one of ten was labeled AI in every trial, which is at the limit, not under it. The flagged piece was my paragraph about my cousin's funeral and my B grade (combined 0.688, model 0.800).
-- **2:** All three labels appeared in every trial. Caveat: the only two **human** labels came from two informal probe texts written by Claude for this test. None of my real writing reached the human label.
-- **3:** 30 of 30 appeals across three trials returned `under_review` and appeared in the log.
-- **4:** 30 of 30 bad bodies (empty, whitespace, null, missing text) returned 400 with no label.
-- **5:** My ten pieces averaged 0.499, the ten AI samples 0.679. The gap is 18.0 points, against a target of 30.
+Real output from one trial, produced by run_eval.py::main against app.py::submit (criterion 1, trial 1, the one piece of my writing labeled AI):
 
-**Real output from one trial**, produced by `run_eval.py::main` against `app.py::submit` (criterion 1, trial 1, the one piece of my writing labeled AI):
-
-```json
+json
 {
   "status": 200,
   "guess": "ai",
@@ -346,11 +269,10 @@ Criteria 1, 2, 4 and 5 run with `python run_eval.py --label before` (scenarios i
   "label": "This text is very likely to have been generated by AI. If you believe this result is incorrect, you can appeal it for human review.",
   "sent": "In my first semester at Irvine Valley College, I flew home for my cous"
 }
-```
 
 Criterion 5, trial 1, the lowest-scoring AI sample, which scored below my funeral paragraph:
 
-```json
+json
 {
   "status": 200,
   "guess": "unsure",
@@ -359,94 +281,92 @@ Criterion 5, trial 1, the lowest-scoring AI sample, which scored below my funera
   "style_score": 0.4252,
   "sent": "Getting enough sleep is essential for good health and daily performanc"
 }
-```
 
-**Diagnoses**
+Diagnoses
 
-*Criterion 5 (missed). Stage: signal two, then the combining rule.* Signal one separates the two groups well: model scores averaged 0.52 on my writing and 0.85 on the AI samples, a 33-point gap. Signal two barely separates them: style scores averaged 0.48 and 0.51, a 3-point gap. Its three measures (sentence-length spread, word variety, punctuation density) read my essay paragraphs and the AI paragraphs as almost the same shape. My 0.5/0.5 average then halves signal one's separation: (33 + 3) ÷ 2 ≈ 18. The groups overlap: my funeral paragraph (0.688) outscored three AI samples (0.639–0.651).
+Criterion 5 (missed). Stage: signal two, then the combining rule. Signal one separates the two groups well: model scores averaged 0.52 on my writing and 0.85 on the AI samples, a 33-point gap. Signal two barely separates them: style scores averaged 0.48 and 0.51, a 3-point gap. Its three measures (sentence-length spread, word variety, punctuation density) read my essay paragraphs and the AI paragraphs as almost the same shape. My 0.5/0.5 average then halves signal one's separation: (33 + 3) ÷ 2 ≈ 18. The groups overlap: my funeral paragraph (0.688) outscored three AI samples (0.639–0.651).
 
-*False-positive attacks FP02–FP07 (broken). Stage: signal one, then the combining rule.* All six have model scores of 0.74–0.88 with middling style scores of 0.51–0.66. Formal, careful, templated or second-language writing uses common words in ordinary sentences, which GPT-2 finds predictable. With equal weights, signal one alone can push the average past 0.65: FP07's style score (0.505) is neutral, but its model score (0.882) carried it to 0.693. The same mechanism flagged my own funeral paragraph in criterion 1.
+False-positive attacks FP02–FP07 (broken). Stage: signal one, then the combining rule. All six have model scores of 0.74–0.88 with middling style scores of 0.51–0.66. Formal, careful, templated or second-language writing uses common words in ordinary sentences, which GPT-2 finds predictable. With equal weights, signal one alone can push the average past 0.65: FP07's style score (0.505) is neutral, but its model score (0.882) carried it to 0.693. The same mechanism flagged my own funeral paragraph in criterion 1.
 
-*Malformed attacks MF02–MF08 and RQ07 (broken). Stage: the route.* `app.py::submit` only checks that `text` is a non-empty string. RQ07 crashed because `request.get_json(silent=True) or {}` returns the list itself (a non-empty list is truthy), and a list has no `.get`. MF02 crashed because `detector.model_signal` raises `ValueError: Text is too short to score` and nothing catches it. MF03–MF08 were scored because nothing checks for real words or a maximum length. Eight failures, one problem.
+Malformed attacks MF02–MF08 and RQ07 (broken). Stage: the route. app.py::submit only checks that text is a non-empty string. RQ07 crashed because request.get_json(silent=True) or {} returns the list itself (a non-empty list is truthy), and a list has no .get. MF02 crashed because detector.model_signal raises ValueError: Text is too short to score and nothing catches it. MF03–MF08 were scored because nothing checks for real words or a maximum length. Eight failures, one problem.
 
-*MF06 and MF07 (broken), a second mechanism. Stage: signal two.* `stylometry.words()` only matches `a-z0-9`, so emoji and right-to-left script contain "zero words". That gives a type-token ratio of 0 and a style score of 1.0, the maximum AI value. A writer using Arabic or Hebrew script would be labeled AI at 0.953.
+MF06 and MF07 (broken), a second mechanism. Stage: signal two. stylometry.words() only matches a-z0-9, so emoji and right-to-left script contain "zero words". That gives a type-token ratio of 0 and a style score of 1.0, the maximum AI value. A writer using Arabic or Hebrew script would be labeled AI at 0.953.
 
-*PI02 (broken). Stage: signal one.* No part of my pipeline reads instructions, so the injection couldn't work as a command. It worked as formatting: the bracketed, capitalized "system message" surprised GPT-2 and dropped the model score to 0.20, giving a human label (0.282).
+PI02 (broken). Stage: signal one. No part of my pipeline reads instructions, so the injection couldn't work as a command. It worked as formatting: the bracketed, capitalized "system message" surprised GPT-2 and dropped the model score to 0.20, giving a human label (0.282).
 
-*EV05 (broken). Stage: both signals.* After a heavy human editing pass, both signals read the text as human (0.32 and 0.37). Once a person has rewritten the text that thoroughly, it's arguably no longer AI writing in any way a detector could measure.
+EV05 (broken). Stage: both signals. After a heavy human editing pass, both signals read the text as human (0.32 and 0.37). Once a person has rewritten the text that thoroughly, it's arguably no longer AI writing in any way a detector could measure.
 
-**The pattern:** three problems, not sixteen. The route accepts anything that is a non-empty string. Signal one mistakes plain, careful writing for AI, and equal weights let it decide alone. Signal two can't tell my essays from AI paragraphs, and can't read non-Latin text at all.
+The pattern: three problems, not sixteen. The route accepts anything that is a non-empty string. Signal one mistakes plain, careful writing for AI, and equal weights let it decide alone. Signal two can't tell my essays from AI paragraphs, and can't read non-Latin text at all.
 
----
+The Improvement
 
-## The Improvement
+What I changed: Input validation in app.py::submit, before either signal runs (two new settings in config.py). The route now returns a 400 and logs a rejection when:
 
-**What I changed:**
+the body isn't a JSON object (a list, a string, unparseable or empty) — body_not_json_object
+the text is over 20,000 characters (MAX_TEXT_CHARS) — text_too_long
+the text has fewer than 5 real words (MIN_WORDS), counted with \w+ so letters in any script count but emoji, punctuation and control characters don't — text_too_short
+the detector raises ValueError on text it can't score, which used to escape as a 500 — text_unscorable
 
-**Which diagnosis pointed at it:**
+Nothing else changed: same signals, weights, thresholds and labels.
 
-### Attack Run — After
+Which diagnosis pointed at it: The route stage. Eight of my sixteen broken attacks traced to one gap: submit only checked that text was a non-empty string. That let a JSON list crash the route (RQ07), let the detector's ValueError crash it (MF02), and let junk get a confident label (MF03–MF06, MF08).
 
-<!-- Same format. `run_attacks.py --label after` -->
+Attack Run — After
 
+python run_attacks.py --set attack_set --label after (full output: results/attack_run_2026-11-22_1308_after.md). Same marking rule as before. Rows that changed are in bold.
 
+ID	Family	Targeting	Before	After	Verdict before → after
+EV01–EV04, EV06–EV09	evasion	various	unsure	unsure	HELD → HELD
+EV05	evasion	heavy human editing pass	human	human	BROKE → BROKE
+EV10	evasion	repeated stanza structure	ai	ai	HELD → HELD
+FP01, FP08	false_positive	plain writing; very short submission	unsure	unsure	HELD → HELD
+FP02–FP07	false_positive	formal, non-native, rubric, technical, template, repetition	ai	ai	BROKE → BROKE
+PI01, PI03–PI06	prompt_injection	various	unsure	unsure	HELD → HELD
+PI02	prompt_injection	disguised system message	human	human	BROKE → BROKE
+MF01	malformed	only whitespace	400	400	HELD → HELD
+MF02	malformed	single character	500	400	BROKE → HELD
+MF03	malformed	control characters	200 human	400	BROKE → HELD
+MF04	malformed	only punctuation	200 unsure	400	BROKE → HELD
+MF05	malformed	very long single word	200 ai	400	BROKE → HELD
+MF06	malformed	emoji only	200 ai	400	BROKE → HELD
+MF07	malformed	right-to-left script	200 ai	200 ai	BROKE → BROKE
+MF08	malformed	60,000 characters	200 ai	400	BROKE → HELD
+RQ01–RQ06, RQ08, RQ09, RQ12	malformed	missing/wrong fields, bad JSON, empty body	400	400	HELD → HELD
+RQ07	malformed	body is a JSON array	500	400	BROKE → HELD
+RQ10, RQ11	malformed	form-encoded; JSON as plain text	429	429	HELD* → HELD*
+FL01_01–05 / 06–12	flood_same_creator	20 rapid submissions	200 / 429	200 / 429	HELD → HELD
 
-**Did it help, and how do I know:**
+* As before, the limiter rejected these, not my route.
 
-<!-- Widening the unsure band usually fixes one problem and creates another.
-     Reporting that trade honestly is worth full credit. -->
+Totals: before 40 held / 16 broke, after 47 held / 9 broke. Malformed breaks went from 8/20 to 1/20, and both 500 crashes are gone.
 
+Run Log — After
 
+python run_eval.py --label after and appeal_check.py --label after, three trials each.
 
----
+Criterion	Target	Run 1	Run 2	Run 3	Verdict
+1. My own writing labeled high-confidence AI	≤ 1 of 10	1/10	1/10	1/10	MET
+2. All three labels produced across ≥10 varied inputs	3 of 3 labels	3/3	3/3	3/3	MET
+3. Appeal moves item to under_review and is logged	10 of 10	10/10	10/10	10/10	MET
+4. Empty or missing text returns 400 with an error field, no label	10 of 10	10/10	10/10	10/10	MET
+5. AI average combined score ≥ 30 points above my writing's average	≥ 30 pts	18.0	18.0	18.0	MISSED
 
-## What's Still Broken
+Did it help, and how do I know: Yes, for what it targeted. Seven malformed attacks that broke before now return a clean 400 (MF02–MF06, MF08, RQ07), including both 500 crashes, so a junk request can no longer take the route down or walk away with a confident label. Nothing else moved: every signal, combined score and label on real text is identical, and my criteria results are unchanged. That's expected, because validation runs before the signals. The trade I checked for didn't show up: FP08, the very short genuine human submission, still got scored rather than rejected by the 5-word minimum. The honest limit is that this fixed the cheapest problem, not the most harmful one. Criterion 5 is still missed and FP02–FP07 are still accused, because those come from signal one and the combining rule, which I deliberately didn't touch.
 
-<!-- For each attack still getting through and each criterion still missed:
-     what you'd do, and why you stopped. -->
+What's Still Broken
 
+FP02–FP07 (six real writers labeled AI) and criterion 1 sitting exactly at its limit. Stage: signal one plus equal weights. What I'd do next: raise AI_THRESHOLD from 0.65 to about 0.75. All six FP attacks (0.69–0.73) and my funeral paragraph (0.688) would move to unsure. The cost is that most of my AI samples (0.64–0.75) would move to unsure too. I stopped because the unit allows one change, and validation fixed a crash, which I ranked first.
 
+Criterion 5 (18-point spread against a 30-point target). Stage: signal two. Its measures barely separate my writing from AI paragraphs (a 3-point gap), and 0.5/0.5 weights halve signal one's 33-point gap. Reweighting toward signal one would widen the spread, but it would also accuse more of the writers in the FP family, so I'd rather fix signal two by finding measures that actually differ between the two groups.
 
-**The trade I'd make if this ran for real:**
+MF07 (right-to-left script scored as AI at 0.953). Stage: signal two. stylometry.words() only matches a-z0-9, so non-Latin text has "zero words" and gets the maximum style score. The fix is a Unicode-aware word pattern in stylometry.py. I left it because it's a signal change, not part of the validation improvement.
 
-<!-- Two sentences. Fewer wrong accusations means more AI text getting through.
-     Say which way you'd go and WHO PAYS FOR IT. -->
+PI02 and EV05 (labeled human). PI02 got through on formatting, not instruction-following; EV05 was rewritten so heavily that I don't think any detector should catch it. I'd leave EV05 alone, and treat PI02 as the same formatting weakness as the evasion family.
 
+Rate limiting per creator_id. A script can rotate creator_ids and never hit the limit, as the attack set itself did. Real protection needs per-account identity or a per-address cap alongside it.
 
+The trade I'd make if this ran for real: I'd raise the AI threshold and accept that more AI text gets through as "unsure," because a wrongly accused writer loses their reputation on the site while a missed AI piece only costs the site a little credibility. The people who pay for that choice are honest writers whose work sits next to undetected AI text. The people who would pay for the opposite choice are non-native and plain-spoken writers like FP03, the ones with the least room to argue back.
 
-<!-- ═════════════════════════════════════════════════════════════════════
+<!-- ═════════════════════════════════════════════════════════════════════ SUBMISSION CHECKLIST — unit 7 [ ] criteria.md has five numbered criteria, each naming a target [ ] Each has a reason underneath [ ] POST /submit returns content_id, guess, confidence, label, model_score and style_score [ ] Two signals that measure DIFFERENT things, each with a named blind spot [ ] Three label variants, all reachable, written out in full [ ] POST /appeal changes status and writes to the log [ ] Signals and Scoring names scoring.py::combine_signals [ ] Sample Run: a submission AND an appeal, as pasted text [ ] At least four new commits [ ] Repository URL submitted — WRITE IT DOWN SUBMISSION CHECKLIST — unit 8 [ ] Rate limiting on /submit, with your numbers justified [ ] The pasted run of status codes showing 429 [ ] Audit log with all nine fields, recording rejections too [ ] The attack set run IN FULL, every input with an outcome [ ] Ten audit log entries pasted as text [ ] Five criteria across three trials [ ] A diagnosis for every miss and every broken attack — stage AND mechanism [ ] One improvement, with Attack Run — After [ ] What's Still Broken, including the production trade [ ] At least four new commits [ ] The SAME repository URL as last unit Do not delete and recreate this repository. ═════════════════════════════════════════════════════════════════════ -->
 
-     SUBMISSION CHECKLIST — unit 7
-
-       [ ] criteria.md has five numbered criteria, each naming a target
-       [ ] Each has a reason underneath
-       [ ] POST /submit returns content_id, guess, confidence, label,
-           model_score and style_score
-       [ ] Two signals that measure DIFFERENT things, each with a named blind spot
-       [ ] Three label variants, all reachable, written out in full
-       [ ] POST /appeal changes status and writes to the log
-       [ ] Signals and Scoring names scoring.py::combine_signals
-       [ ] Sample Run: a submission AND an appeal, as pasted text
-       [ ] At least four new commits
-       [ ] Repository URL submitted — WRITE IT DOWN
-
-     SUBMISSION CHECKLIST — unit 8
-
-       [ ] Rate limiting on /submit, with your numbers justified
-       [ ] The pasted run of status codes showing 429
-       [ ] Audit log with all nine fields, recording rejections too
-       [ ] The attack set run IN FULL, every input with an outcome
-       [ ] Ten audit log entries pasted as text
-       [ ] Five criteria across three trials
-       [ ] A diagnosis for every miss and every broken attack — stage AND mechanism
-       [ ] One improvement, with Attack Run — After
-       [ ] What's Still Broken, including the production trade
-       [ ] At least four new commits
-       [ ] The SAME repository URL as last unit
-
-     Do not delete and recreate this repository.
-     ═════════════════════════════════════════════════════════════════════ -->
-
----
-
-📖 **How to run this project: [RUNNING.md](RUNNING.md)**
+📖 How to run this project: RUNNING.md
